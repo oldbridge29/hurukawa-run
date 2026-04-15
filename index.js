@@ -2,6 +2,18 @@
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
+// --------- でんまる画像 ---------
+const denmaruImg = new Image();
+denmaruImg.src = "./images/denmaru.png";   // 置いた場所に合わせる
+let denmaruReady = false;
+
+denmaruImg.onload = () => {
+  denmaruReady = true;
+};
+
+// 画像がボケるのが嫌ならON（好み）
+ctx.imageSmoothingEnabled = true;
+
 // --------- HiDPI + リサイズ ---------
 function resize() {
   const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
@@ -86,10 +98,10 @@ class Player {
     this.reset();
   }
   reset() {
-    this.wRun = 44;
-    this.hRun = 64;
-    this.wSlide = 58;
-    this.hSlide = 40;
+    this.wRun = 44*2;
+    this.hRun = 64*2;
+    this.wSlide = 58*2;
+    this.hSlide = 40*2;
 
     this.x = 140;
     this.y = 0;
@@ -100,6 +112,7 @@ class Player {
     this.slideTimer = 0;
 
     this.invuln = 0; // 被弾後の無敵フラッシュ
+    this.runPhase = 0; // 走ってる感の揺れ
   }
 
   getRect() {
@@ -133,45 +146,50 @@ class Player {
     }
 
     if (this.invuln > 0) this.invuln -= dt;
+
+    // 地上にいる時だけ「走ってる感」を出す
+    if (this.onGround) this.runPhase += dt * 14;  // 数字を上げるほど足早に見える
+
   }
 
   draw(ctx) {
-    const r = this.getRect();
-    // 影
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.beginPath();
-    ctx.ellipse(r.x + r.w * 0.5, r.y + r.h + 8, r.w * 0.45, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
+  const r = this.getRect();
 
-    // 本体
-    const blink = this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0;
-    if (blink) return;
+  // 影（そのまま）
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.beginPath();
+  ctx.ellipse(
+    r.x + r.w * 0.5,
+    r.y + r.h + 8,
+    r.w * 0.45,
+    8,
+    0,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
 
-    // クッキーっぽい色（簡易）
-    ctx.fillStyle = "#f3b56b";
-    ctx.strokeStyle = "#8a4b1f";
-    ctx.lineWidth = 2;
+  // 無敵点滅（そのまま）
+  const blink = this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0;
+  if (blink) return;
 
-    roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-    ctx.fill();
-    ctx.stroke();
+  // 走りの上下揺れ（地上だけ）
+  const bob = this.onGround ? Math.sin(this.runPhase) * 2 : 0;
 
-    // 顔（簡易）
-    ctx.fillStyle = "#2a1a14";
-    ctx.beginPath();
-    ctx.arc(r.x + r.w * 0.68, r.y + r.h * 0.35, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(r.x + r.w * 0.55, r.y + r.h * 0.35, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 口
-    ctx.strokeStyle = "#2a1a14";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(r.x + r.w * 0.62, r.y + r.h * 0.55, 7, 0.1, Math.PI - 0.1);
-    ctx.stroke();
+  // でんまる画像が読み込めたら画像で描画
+  if (denmaruReady) {
+    ctx.drawImage(denmaruImg, r.x, r.y + bob, r.w, r.h);
+    return;
   }
+
+  // 読み込み前の保険：四角で表示
+  ctx.fillStyle = "#f3b56b";
+  ctx.strokeStyle = "#8a4b1f";
+  ctx.lineWidth = 2;
+  roundRect(ctx, r.x, r.y + bob, r.w, r.h, 10);
+  ctx.fill();
+  ctx.stroke();
+}
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -392,7 +410,7 @@ function drawOverlayStart() {
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "800 42px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-  ctx.fillText("COOKIE-RUNNER MINI", 40, h * 0.38);
+  ctx.fillText("古川ラン", 40, h * 0.38);
 
   ctx.fillStyle = "rgba(255,255,255,0.85)";
   ctx.font = "600 18px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
@@ -494,14 +512,14 @@ function loop(now) {
 
   // -------- PLAY更新 --------
   // 徐々に難しく：スピード上昇
-  speed = clamp(BASE_SPEED + score * 0.9, BASE_SPEED, MAX_SPEED);
+  speed = clamp(BASE_SPEED + score * 0.05, BASE_SPEED, MAX_SPEED);
 
   // スコア：生存時間 + 速度ボーナス
   score += dt * (40 + speed * 0.04);
 
-  // スポーン間隔：速くなるほど短く
+  // スポーン間隔
   spawnTimer -= dt;
-  const spawnInterval = clamp(1.15 - score * 0.0008, 0.52, 1.15);
+  const spawnInterval = 0.8;
   if (spawnTimer <= 0) {
     spawnObstacle(groundY);
     spawnTimer = spawnInterval + rand(-0.12, 0.18);
@@ -538,7 +556,7 @@ function loop(now) {
     // 少し当たり判定を甘く
     const shrink = 6;
     const or2 = { x: or.x + shrink, y: or.y + shrink, w: or.w - shrink * 2, h: or.h - shrink * 2 };
-    const pr2 = { x: pr.x + 5, y: pr.y + 5, w: pr.w - 10, h: pr.h - 10 };
+    const pr2 = { x: pr.x + 10, y: pr.y + 10, w: pr.w - 20, h: pr.h - 20 };
     if (aabb(pr2, or2)) {
       if (player.invuln <= 0) {
         player.invuln = 0.6;
