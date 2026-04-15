@@ -4,7 +4,7 @@ const ctx = canvas.getContext("2d");
 
 // --------- でんまる画像 ---------
 const denmaruImg = new Image();
-denmaruImg.src = "./images/denmaru.png";   // 置いた場所に合わせる
+denmaruImg.src = "denmaru.png";   // 置いた場所に合わせる
 let denmaruReady = false;
 
 denmaruImg.onload = () => {
